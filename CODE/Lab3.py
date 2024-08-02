@@ -3,16 +3,31 @@ from graphviz import Digraph
 
 # Paso 1: Función para leer expresiones regulares desde un archivo de texto
 def read_expressions_from_file(file_path):
-    with open(file_path, 'r') as file:
-        expressions = [line.strip() for line in file]
+    expressions = []
+    try:
+        with open(file_path, 'r') as file:
+            for linea in file:
+                expressions.append(linea.strip())  
+    except FileNotFoundError:
+        print(f"El archivo {file_path} no se encontró.")
+    except Exception as e:
+        print(f"Se produjo un error: {e}")
     return expressions
+
+"""
+(a*|b*)+
+((e|a)|b*)*
+(a|b)*abb(a|b)*
+0?(1?)?0*
+"""
 
 # Paso 2: Transformar las extensiones de expresiones regulares (+ y ?)
 def transform_extensions(regex):
     regex = regex.replace('+', '{PLUS}')
     regex = regex.replace('?', '{QUESTION}')
     transformed = re.sub(r'(\w)\{PLUS\}', r'\1\1*', regex)
-    transformed = re.sub(r'(\w)\{QUESTION\}', r'\1|ε', transformed)
+    transformed = re.sub(r'\{QUESTION\}', r'|ε', transformed)
+    
     return transformed
 
 # Paso 3: Conversión de Infix a Postfix (ya implementado anteriormente)
@@ -155,7 +170,7 @@ def sanitize_filename(filename):
 
 # Ejemplo de uso: Leer expresiones desde un archivo de texto y procesarlas
 
-expresiones = read_expressions_from_file('regexs.txt')
+expresiones = read_expressions_from_file("regexs.txt")  
 
 for expresion in expresiones:
     try:
