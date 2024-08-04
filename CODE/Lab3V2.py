@@ -3,7 +3,8 @@
 # Rodrigo Mansilla
 
 import re
-from graphviz import Digraph
+import networkx as nx
+import matplotlib.pyplot as plt
 
 # Paso 1: Función para leer expresiones regulares desde un archivo de texto
 def read_expressions_from_file(file_path):
@@ -18,21 +19,57 @@ def read_expressions_from_file(file_path):
         print(f"Se produjo un error: {e}")
     return expressions
 
-"""
-(a*|b*)+
-((e|a)|b*)*
-(a|b)*abb(a|b)*
-0?(1?)?0*
-"""
-
 # Paso 2: Transformar las extensiones de expresiones regulares (+ y ?)
 def transform_extensions(regex):
-    regex = regex.replace('+', '{PLUS}')
-    regex = regex.replace('?', '{QUESTION}')
-    transformed = re.sub(r'(\w)\{PLUS\}', r'\1\1*', regex)
-    transformed = re.sub(r'\{QUESTION\}', r'|ε', transformed)
+    temp_regex = regex.replace('+', '{PLUS}').replace('?', '{QUESTION}')
     
-    return transformed
+    result = []
+    i = 0
+    
+    while i < len(temp_regex):
+        if temp_regex[i:i+6] == '{PLUS}':
+            if result and result[-1] == ')':
+                balance = 0
+                j = len(result) - 1
+                while j >= 0:
+                    if result[j] == ')':
+                        balance += 1
+                    elif result[j] == '(':
+                        balance -= 1
+                    if balance == 0:
+                        break
+                    j -= 1
+                group = ''.join(result[j:])
+                result = result[:j]
+                result.append(f"({group}{group}*)")
+            elif result and result[-1].isalnum():
+                last_char = result.pop()
+                result.append(f"({last_char}{last_char}*)")
+            i += 6
+        elif temp_regex[i:i+9] == '{QUESTION}':
+            if result and result[-1] == ')':
+                balance = 0
+                j = len(result) - 1
+                while j >= 0:
+                    if result[j] == ')':
+                        balance += 1
+                    elif result[j] == '(':
+                        balance -= 1
+                    if balance == 0:
+                        break
+                    j -= 1
+                group = ''.join(result[j:])
+                result = result[:j]
+                result.append(f"({group}|ε)")
+            elif result and result[-1].isalnum():
+                last_char = result.pop()
+                result.append(f"({last_char}|ε)")
+            i += 9
+        else:
+            result.append(temp_regex[i])
+            i += 1
+    
+    return ''.join(result)
 
 # Paso 3: Conversión de Infix a Postfix (ya implementado anteriormente)
 def getPrecedence(c):
@@ -153,21 +190,25 @@ def print_ast(node, level=0):
         print(' ' * 4 * level + '->', node.value)
         print_ast(node.left, level + 1)
 
-# Paso 6: Dibujar el árbol utilizando Graphviz
+# Paso 6: Dibujar el árbol utilizando networkx
 
 def draw_ast(node):
-    dot = Digraph()
+    G = nx.DiGraph()
     def add_nodes_edges(node):
         if node:
-            dot.node(str(id(node)), node.value)
+            G.add_node(str(id(node)), label=node.value)
             if node.left:
-                dot.edge(str(id(node)), str(id(node.left)))
+                G.add_edge(str(id(node)), str(id(node.left)))
                 add_nodes_edges(node.left)
             if node.right:
-                dot.edge(str(id(node)), str(id(node.right)))
+                G.add_edge(str(id(node)), str(id(node.right)))
                 add_nodes_edges(node.right)
     add_nodes_edges(node)
-    return dot
+    
+    pos = nx.spring_layout(G)
+    labels = nx.get_node_attributes(G, 'label')
+    nx.draw(G, pos, labels=labels, with_labels=True, node_size=2000, node_color='lightblue', font_size=10, font_weight='bold', arrows=False)
+    plt.show()
 
 def sanitize_filename(filename):
     return re.sub(r'[^a-zA-Z0-9_-]', '_', filename)
@@ -186,8 +227,7 @@ for expresion in expresiones:
         ast = build_ast(postfix)
         print_ast(ast)
         sanitized_expression = sanitize_filename(expresion)
-        dot = draw_ast(ast)
-        dot.render(f'ast_{sanitized_expression}', format='png', view=True)
+        draw_ast(ast)
         print("\n")
     except ValueError as e:
         print(f"Error processing expression {expresion}: {e}")
