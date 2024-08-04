@@ -1,36 +1,29 @@
-# Laboratorio 3 Teoría de la computación
-# Nelson García Bravatti
-# Rodrigo Mansilla
-
 import re
 import networkx as nx
 import matplotlib.pyplot as plt
 
-# Paso 1: Función para leer expresiones regulares desde un archivo de texto
+# Step 1: Function to read regular expressions from a text file
 def read_expressions_from_file(file_path):
     expressions = []
     try:
         with open(file_path, 'r') as file:
-            for linea in file:
-                expressions.append(linea.strip())  
+            for line in file:
+                expressions.append(line.strip())
     except FileNotFoundError:
-        print(f"El archivo {file_path} no se encontró.")
+        print(f"File {file_path} not found.")
     except Exception as e:
-        print(f"Se produjo un error: {e}")
+        print(f"An error occurred: {e}")
     return expressions
 
-# Paso 2: Transformar las extensiones de expresiones regulares (+ y ?)
+# Step 2: Transforming regular expression extensions (+ and ?)
 def transform_extensions(regex):
-    temp_regex = regex.replace('+', '{PLUS}').replace('?', '{QUESTION}')
-    
     result = []
     i = 0
-    
-    while i < len(temp_regex):
-        if temp_regex[i:i+6] == '{PLUS}':
+    while i < len(regex):
+        if regex[i] == '+':
             if result and result[-1] == ')':
-                balance = 0
-                j = len(result) - 1
+                balance = 1
+                j = len(result) - 2
                 while j >= 0:
                     if result[j] == ')':
                         balance += 1
@@ -41,15 +34,14 @@ def transform_extensions(regex):
                     j -= 1
                 group = ''.join(result[j:])
                 result = result[:j]
-                result.append(f"({group}{group}*)")
-            elif result and result[-1].isalnum():
+                result.append(f"{group}{group}*")
+            elif result:
                 last_char = result.pop()
-                result.append(f"({last_char}{last_char}*)")
-            i += 6
-        elif temp_regex[i:i+9] == '{QUESTION}':
+                result.append(f"{last_char}{last_char}*")
+        elif regex[i] == '?':
             if result and result[-1] == ')':
-                balance = 0
-                j = len(result) - 1
+                balance = 1
+                j = len(result) - 2
                 while j >= 0:
                     if result[j] == ')':
                         balance += 1
@@ -61,17 +53,15 @@ def transform_extensions(regex):
                 group = ''.join(result[j:])
                 result = result[:j]
                 result.append(f"({group}|ε)")
-            elif result and result[-1].isalnum():
+            elif result:
                 last_char = result.pop()
                 result.append(f"({last_char}|ε)")
-            i += 9
         else:
-            result.append(temp_regex[i])
-            i += 1
-    
+            result.append(regex[i])
+        i += 1
     return ''.join(result)
 
-# Paso 3: Conversión de Infix a Postfix (ya implementado anteriormente)
+# Step 3: Ensuring correct infix to postfix conversion using Shunting Yard algorithm
 def getPrecedence(c):
     precedences = {'(': 1, '|': 2, '.': 3, '?': 4, '*': 4, '+': 4, '^': 5}
     return precedences.get(c, 0)
@@ -89,16 +79,14 @@ def formatRegEx(regex):
                 res.append(c1)
                 res.append(regex[i + 1])
                 i += 1
+        else:
+            if c1 not in allOperators and (i + 1 < len(regex) and regex[i + 1] not in allOperators):
+                res.append(c1)
+                res.append('.')
             else:
                 res.append(c1)
-        else:
-            res.append(c1)
-            if i + 1 < len(regex):
-                c2 = regex[i + 1]
-                if (c1 not in allOperators and c1 != '(' and c1 != ')') and (c2 not in allOperators and c2 != ')' and c2 != '('):
-                    res.append('.')
         i += 1
-
+    
     return ''.join(res)
 
 def checkParenthesesBalance(regex):
@@ -118,6 +106,7 @@ def checkParenthesesBalance(regex):
             escaped = False
     return not stack
 
+# Ajustar la lógica de concatenación implícita y precedencia de operadores en infixToPostfix
 def infixToPostfix(regex):
     if not checkParenthesesBalance(regex):
         raise ValueError("Mismatched parentheses")
@@ -125,23 +114,16 @@ def infixToPostfix(regex):
     postfix = []
     stack = []
     formattedRegEx = formatRegEx(regex)
-    
-    i = 0
-    while i < len(formattedRegEx):
-        c = formattedRegEx[i]
-        if c == '\\':
-            if i + 1 < len(formattedRegEx):
-                postfix.append(formattedRegEx[i])
-                postfix.append(formattedRegEx[i + 1])
-                i += 1
-        elif c.isalnum() or c in ['[', ']', '{', '}', '+', '.']:
+
+    for i, c in enumerate(formattedRegEx):
+        if c.isalnum() or c in ['ε']:
             postfix.append(c)
         elif c == '(':
             stack.append(c)
         elif c == ')':
             while stack and stack[-1] != '(':
                 postfix.append(stack.pop())
-            if stack:
+            if stack and stack[-1] == '(':
                 stack.pop()
             else:
                 raise ValueError("Mismatched parentheses")
@@ -149,85 +131,92 @@ def infixToPostfix(regex):
             while stack and getPrecedence(stack[-1]) >= getPrecedence(c):
                 postfix.append(stack.pop())
             stack.append(c)
-        i += 1
 
     while stack:
-        top = stack.pop()
-        if top == '(':
+        if stack[-1] == '(':
             raise ValueError("Mismatched parentheses")
-        postfix.append(top)
+        postfix.append(stack.pop())
 
     return ''.join(postfix)
 
-# Paso 4: Definir las clases para el árbol sintáctico
+# Función de simplificación ajustada
+def simplify_expression(expression):
+    # Eliminar paréntesis redundantes alrededor de caracteres individuales
+    expression = re.sub(r'\(\s*(\w|\s*ε\s*)\s*\)', r'\1', expression)
 
-class Node:
+    # Simplificar expresiones con ε, preservando la estructura
+    while True:
+        new_expr = re.sub(r'\(\s*ε\s*\)', 'ε', expression)
+        new_expr = re.sub(r'\(\s*\(\s*ε\s*\)\s*\)', 'ε', new_expr)  # Eliminar paréntesis anidados
+        if new_expr == expression:
+            break
+        expression = new_expr
+
+    return expression
+
+# Step 4: Defining the AST and drawing it using NetworkX
+class ASTNode:
     def __init__(self, value, left=None, right=None):
         self.value = value
         self.left = left
         self.right = right
 
-# Paso 5: Construir el árbol sintáctico a partir de la expresión postfix
-
-def build_ast(postfix):
+def postfix_to_ast(postfix):
     stack = []
     for char in postfix:
-        if char.isalnum() or char in ['[', ']', '{', '}', '+', '.']:
-            stack.append(Node(char))
-        else:
-            if char in {'*', '?', '+'}:
-                node = Node(char, stack.pop())
-            else:
+        if char.isalnum() or char == 'ε':
+            stack.append(ASTNode(char))
+        elif char in ['*', '?', '+']:
+            if stack:
+                operand = stack.pop()
+                stack.append(ASTNode(char, operand))
+        elif char in ['|', '.']:
+            if len(stack) >= 2:
                 right = stack.pop()
                 left = stack.pop()
-                node = Node(char, left, right)
-            stack.append(node)
-    return stack.pop()
-
-def print_ast(node, level=0):
-    if node:
-        print_ast(node.right, level + 1)
-        print(' ' * 4 * level + '->', node.value)
-        print_ast(node.left, level + 1)
-
-# Paso 6: Dibujar el árbol utilizando networkx
-
-def draw_ast(node):
-    G = nx.DiGraph()
-    def add_nodes_edges(node):
-        if node:
-            G.add_node(str(id(node)), label=node.value)
-            if node.left:
-                G.add_edge(str(id(node)), str(id(node.left)))
-                add_nodes_edges(node.left)
-            if node.right:
-                G.add_edge(str(id(node)), str(id(node.right)))
-                add_nodes_edges(node.right)
-    add_nodes_edges(node)
+                stack.append(ASTNode(char, left, right))
+        else:
+            stack.append(ASTNode(char))
     
-    pos = nx.spring_layout(G)
-    labels = nx.get_node_attributes(G, 'label')
-    nx.draw(G, pos, labels=labels, with_labels=True, node_size=2000, node_color='lightblue', font_size=10, font_weight='bold', arrows=False)
+    if len(stack) != 1:
+        raise ValueError(f"Invalid postfix expression: {postfix}")
+    
+    return stack[0]
+
+def draw_ast(root):
+    graph = nx.DiGraph()
+    
+    def add_edges(node):
+        if not node:
+            return
+        if node.left:
+            graph.add_edge(node.value, node.left.value)
+            add_edges(node.left)
+        if node.right:
+            graph.add_edge(node.value, node.right.value)
+            add_edges(node.right)
+
+    add_edges(root)
+    pos = nx.spring_layout(graph)
+    nx.draw(graph, pos, with_labels=True, arrows=True)
     plt.show()
 
-def sanitize_filename(filename):
-    return re.sub(r'[^a-zA-Z0-9_-]', '_', filename)
+# Step 5: Main logic
+def main():
+    expressions = read_expressions_from_file('regexs.txt')
+    for expression in expressions:
+        print(f"Original Expression: {expression}")
+        transformed_expression = transform_extensions(expression)
+        print(f"Transformed Expression: {transformed_expression}")
+        simplified_expression = simplify_expression(transformed_expression)
+        print(f"Simplified Expression: {simplified_expression}")
+        postfix_expression = infixToPostfix(simplified_expression)
+        print(f"Postfix Expression: {postfix_expression}")
+        try:
+            ast_root = postfix_to_ast(postfix_expression)
+            draw_ast(ast_root)
+        except IndexError as e:
+            print(f"Error in constructing AST for expression: {expression}")
+            print(e)
 
-# Ejemplo de uso: Leer expresiones desde un archivo de texto y procesarlas
-
-expresiones = read_expressions_from_file("regexs.txt")  
-
-for expresion in expresiones:
-    try:
-        print(f"Processing expression: {expresion}")
-        transformed_expression = transform_extensions(expresion)
-        postfix = infixToPostfix(transformed_expression)
-        print(f"Expresión Infix: {expresion}")
-        print(f"Expresión Postfix: {postfix}")
-        ast = build_ast(postfix)
-        print_ast(ast)
-        sanitized_expression = sanitize_filename(expresion)
-        draw_ast(ast)
-        print("\n")
-    except ValueError as e:
-        print(f"Error processing expression {expresion}: {e}")
+main()
