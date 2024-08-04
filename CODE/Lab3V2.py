@@ -17,49 +17,49 @@ def read_expressions_from_file(file_path):
 
 # Step 2: Transforming regular expression extensions (+ and ?)
 def transform_extensions(regex):
-    result = []
-    i = 0
-    while i < len(regex):
+    longitud = len(regex)
+    resultado = []
+
+    for i in range(longitud):
         if regex[i] == '+':
-            if result and result[-1] == ')':
-                balance = 1
-                j = len(result) - 2
+            if resultado and resultado[-1] == ')':
+                balance = 0
+                j = len(resultado) - 1
                 while j >= 0:
-                    if result[j] == ')':
+                    if resultado[j] == ')':
                         balance += 1
-                    elif result[j] == '(':
+                    elif resultado[j] == '(':
                         balance -= 1
                     if balance == 0:
                         break
                     j -= 1
-                group = ''.join(result[j:])
-                result = result[:j]
-                result.append(f"{group}{group}*")
-            elif result:
-                last_char = result.pop()
-                result.append(f"{last_char}{last_char}*")
+                grupo = ''.join(resultado[j:])
+                resultado = resultado[:j]
+                resultado.append(f"({grupo}{grupo}*)")
+            elif resultado and resultado[-1].isalnum():
+                ultimo_caracter = resultado.pop()
+                resultado.append(f"({ultimo_caracter}{ultimo_caracter}*)")
         elif regex[i] == '?':
-            if result and result[-1] == ')':
-                balance = 1
-                j = len(result) - 2
+            if resultado and resultado[-1] == ')':
+                balance = 0
+                j = len(resultado) - 1
                 while j >= 0:
-                    if result[j] == ')':
+                    if resultado[j] == ')':
                         balance += 1
-                    elif result[j] == '(':
+                    elif resultado[j] == '(':
                         balance -= 1
                     if balance == 0:
                         break
                     j -= 1
-                group = ''.join(result[j:])
-                result = result[:j]
-                result.append(f"({group}|ε)")
-            elif result:
-                last_char = result.pop()
-                result.append(f"({last_char}|ε)")
+                grupo = ''.join(resultado[j:])
+                resultado = resultado[:j]
+                resultado.append(f"({grupo}|ε)")
+            elif resultado and resultado[-1].isalnum():
+                ultimo_caracter = resultado.pop()
+                resultado.append(f"({ultimo_caracter}|ε)")
         else:
-            result.append(regex[i])
-        i += 1
-    return ''.join(result)
+            resultado.append(regex[i])
+    return ''.join(resultado)
 
 # Step 3: Ensuring correct infix to postfix conversion using Shunting Yard algorithm
 def getPrecedence(c):
